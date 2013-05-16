@@ -283,7 +283,7 @@ func (s *AdaptersSuite) TestRespondToChannelWithNoConnection(c *C) {
   defer after(cmd)
 
   respondAdapter.Connect()
-  
+
   request := "HELLO"
   responseChannel := make(chan bool, 1)
 
@@ -292,5 +292,5 @@ func (s *AdaptersSuite) TestRespondToChannelWithNoConnection(c *C) {
     responseChannel <- true
   })
 
-  failOnTimeout(responseChannel, 2 * time.Second, func(){})
+  failOnTimeout(responseChannel, 4 * time.Second, func(){})
 }

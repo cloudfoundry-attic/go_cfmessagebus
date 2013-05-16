@@ -1,0 +1,3 @@
+[submodule "github.com/apcera/nats"]
+	path = github.com/apcera/nats
+	url = git@github.com:apcera/nats.git

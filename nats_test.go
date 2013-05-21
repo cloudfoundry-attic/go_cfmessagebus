@@ -8,7 +8,7 @@ import (
   "net"
   "time"
   . "launchpad.net/gocheck"
-  nats "github.com/apcera/nats"
+  nats "github.com/cf-frameworks/nats-1"
   "strings"
 )
 
@@ -49,7 +49,7 @@ func withTimeout(successChan chan bool, timeout time.Duration, onSuccess func(),
     onSuccess()
   case <-timeoutChan:
     onTimeout()
-  } 
+  }
 }
 
 func NatsRequestResponder(adapter *NatsAdapter, request_subject string, subscribeChan chan bool) {
@@ -111,7 +111,7 @@ func (s *AdaptersSuite) TestConnectReturnsErrOnFailure(c *C) {
   adapter := NewNatsAdapter()
   adapter.Configure("127.0.0.1", 4223, "nats", "nats")
 
-  c.Check(adapter.Connect(), ErrorMatches, "nats: No servers available for connection")  
+  c.Check(adapter.Connect(), ErrorMatches, "nats: No servers available for connection")
 }
 
 func (s *AdaptersSuite) TestSubscribe(c *C) {
@@ -162,7 +162,7 @@ func (s *AdaptersSuite) TestPublishWithNoConnection(c *C) {
   adapter := NewNatsAdapter()
   adapter.Configure("127.0.0.1", 4222, "nats", "nats")
 
-  err := adapter.Publish("some-message", []byte("data")) 
+  err := adapter.Publish("some-message", []byte("data"))
   c.Assert(err, Not(IsNil))
 }
 
@@ -170,7 +170,7 @@ func (s *AdaptersSuite) TestUnsubscribeAllWithNoConnection(c *C) {
   adapter := NewNatsAdapter()
   adapter.Configure("127.0.0.1", 4222, "nats", "nats")
 
-  err := adapter.UnsubscribeAll() 
+  err := adapter.UnsubscribeAll()
   c.Assert(err, Not(IsNil))
 }
 
@@ -178,7 +178,7 @@ func (s *AdaptersSuite) TestRequestWithNoConnection(c *C) {
   adapter := NewNatsAdapter()
   adapter.Configure("127.0.0.1", 4222, "nats", "nats")
 
-  
+
   err := adapter.Request("some-message", []byte("data"), func(payload []byte) {
     fmt.Println("CALLBACK!")
   })
@@ -194,9 +194,12 @@ func (s *AdaptersSuite) TestPubSubWhenNatsGoesDown(c *C) {
     messagesReceived = append(messagesReceived, string(payload))
     receivedChan <- true
   })
-  
+
   StopNats(nats_cmd)
   waitUntilNatsDown(adapter.port)
+
+  time.Sleep(30 * time.Second)
+
   nats_cmd = StartNats(adapter.port)
   defer after(nats_cmd)
 

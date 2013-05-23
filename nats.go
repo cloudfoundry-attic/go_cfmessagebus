@@ -9,6 +9,7 @@ import (
 
 type NatsAdapter struct {
 	client        *nats.Conn
+	opts          nats.Options
 	host          string
 	user          string
 	port          int
@@ -35,7 +36,10 @@ func (adapter *NatsAdapter) Configure(host string, port int, user string, passwo
 }
 
 func (adapter *NatsAdapter) Connect() error {
+	return adapter.connect()
+}
 
+func (adapter *NatsAdapter) connect() error {
 	user_password := ""
 	if adapter.user != "" || adapter.password != "" {
 		user_password = fmt.Sprintf("%s:%s@", adapter.user, adapter.password)
@@ -46,8 +50,9 @@ func (adapter *NatsAdapter) Connect() error {
 	opts := nats.DefaultOptions
 	opts.Url = url
 	opts.MaxReconnect = -1
+	adapter.opts = opts
 
-	natsClient, err := opts.Connect()
+	natsClient, err := adapter.opts.Connect()
 	if err != nil {
 		return err
 	}

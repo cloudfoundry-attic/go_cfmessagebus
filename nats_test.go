@@ -3,7 +3,7 @@ package go_cfmessagebus
 import (
 	"errors"
 	"fmt"
-	nats "github.com/cf-frameworks/nats-1"
+	nats "github.com/apcera/nats"
 	. "launchpad.net/gocheck"
 	"net"
 	exec "os/exec"

@@ -3,7 +3,7 @@ package go_cfmessagebus
 import (
 	"errors"
 	"fmt"
-	nats "github.com/cf-frameworks/nats-1"
+	nats "github.com/apcera/nats"
 	"net"
 )
 
@@ -75,6 +75,7 @@ func (adapter *NatsAdapter) Subscribe(subject string, callback func(payload []by
 	} else {
 		return errors.New("No connection to Nats. Caching subscription...")
 	}
+
 	return nil
 }
 
@@ -124,6 +125,12 @@ func (adapter *NatsAdapter) RespondToChannel(subject string, replyCallback func(
 
 func (adapter *NatsAdapter) Ping() bool {
 	_, err := net.Dial("tcp", fmt.Sprintf("%s:%d", adapter.host, adapter.port))
+	if err != nil {
+		return false
+	}
+
+	// Flush does a real nats Ping under the covers
+	err = adapter.client.Flush()
 	return err == nil
 }
 

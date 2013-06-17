@@ -5,7 +5,6 @@ import (
 	"fmt"
 	nats "github.com/vito/yagnats"
 	"math/rand"
-	"net"
 	"time"
 )
 
@@ -116,14 +115,7 @@ func (adapter *NatsAdapter) RespondToChannel(subject string, replyCallback func(
 }
 
 func (adapter *NatsAdapter) Ping() bool {
-	_, err := net.Dial("tcp", fmt.Sprintf("%s:%d", adapter.host, adapter.port))
-	if err != nil {
-		return false
-	}
-
-	// TODO: silly
-	adapter.client.Ping()
-	return true
+	return adapter.client.Ping()
 }
 
 func withConnectionCheck(connection *nats.Client, callback func()) error {

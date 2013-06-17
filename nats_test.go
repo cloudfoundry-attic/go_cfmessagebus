@@ -3,7 +3,7 @@ package go_cfmessagebus
 import (
 	"errors"
 	"fmt"
-	nats "github.com/apcera/nats"
+	nats "github.com/vito/yagnats"
 	. "launchpad.net/gocheck"
 	"net"
 	exec "os/exec"
@@ -57,10 +57,10 @@ func NatsRequestResponder(adapter *NatsAdapter, request_subject string, subscrib
 	serverAdapter.Configure(adapter.host, adapter.port, adapter.user, adapter.password)
 	serverAdapter.Connect()
 
-	serverAdapter.client.Subscribe(request_subject, func(msg *nats.Msg) {
-		serverAdapter.Publish(msg.Reply, []byte("Response"))
+	serverAdapter.client.Subscribe(request_subject, func(msg *nats.Message) {
+		serverAdapter.Publish(msg.ReplyTo, []byte("Response"))
 		time.Sleep(500 * time.Millisecond)
-		serverAdapter.Publish(msg.Reply, []byte("Second Response"))
+		serverAdapter.Publish(msg.ReplyTo, []byte("Second Response"))
 	})
 	subscribeChan <- true
 }
@@ -111,7 +111,7 @@ func (s *AdaptersSuite) TestConnectReturnsErrOnFailure(c *C) {
 	adapter := NewNatsAdapter()
 	adapter.Configure("127.0.0.1", 4223, "nats", "nats")
 
-	c.Check(adapter.Connect(), ErrorMatches, "nats: No servers available for connection")
+	c.Check(adapter.Connect(), ErrorMatches, "dial tcp 127.0.0.1:4223: connection refused")
 }
 
 func (s *AdaptersSuite) TestSubscribe(c *C) {

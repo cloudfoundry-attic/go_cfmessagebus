@@ -3,25 +3,27 @@ package go_cfmessagebus
 import (
 	"errors"
 	"fmt"
-	nats "github.com/apcera/nats"
+	nats "github.com/vito/yagnats"
+	"math/rand"
 	"net"
+	"time"
 )
 
 type NatsAdapter struct {
-	client        *nats.Conn
-	opts          nats.Options
+	client        *nats.Client
 	host          string
 	user          string
 	port          int
 	password      string
 	subscriptions []*Subscription
+	rand          *rand.Rand
 }
 
 type Subscription struct {
-	subject          string
-	callback         func([]byte)
-	reply            func([]byte) []byte
-	natsSubscription *nats.Subscription
+	subject  string
+	callback func([]byte)
+	reply    func([]byte) []byte
+	id       int
 }
 
 func NewNatsAdapter() *NatsAdapter {
@@ -40,30 +42,29 @@ func (adapter *NatsAdapter) Connect() error {
 }
 
 func (adapter *NatsAdapter) connect() error {
-	user_password := ""
-	if adapter.user != "" || adapter.password != "" {
-		user_password = fmt.Sprintf("%s:%s@", adapter.user, adapter.password)
-	}
+	addr := fmt.Sprintf("%s:%d", adapter.host, adapter.port)
 
-	url := fmt.Sprintf("nats://%s%s:%d", user_password, adapter.host, adapter.port)
+	client := nats.NewClient()
 
-	opts := nats.DefaultOptions
-	opts.Url = url
-	opts.MaxReconnect = -1
-	adapter.opts = opts
-
-	natsClient, err := adapter.opts.Connect()
+	err := client.Connect(addr, adapter.user, adapter.password)
 	if err != nil {
 		return err
 	}
 
-	adapter.client = natsClient
+	adapter.client = client
+	adapter.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for _, sub := range adapter.subscriptions {
 		subscribeInNats(adapter, sub)
 	}
 
 	return nil
+}
+
+func (adapter *NatsAdapter) createInbox() string {
+	return fmt.Sprintf("_INBOX.%04x%04x%04x%04x%04x%06x",
+		adapter.rand.Int31n(0x10000), adapter.rand.Int31n(0x10000), adapter.rand.Int31n(0x10000),
+		adapter.rand.Int31n(0x10000), adapter.rand.Int31n(0x10000), adapter.rand.Int31n(0x1000000))
 }
 
 func (adapter *NatsAdapter) Subscribe(subject string, callback func(payload []byte)) error {
@@ -82,32 +83,22 @@ func (adapter *NatsAdapter) Subscribe(subject string, callback func(payload []by
 func (adapter *NatsAdapter) UnsubscribeAll() error {
 	return withConnectionCheck(adapter.client, func() {
 		for _, sub := range adapter.subscriptions {
-			sub.natsSubscription.Unsubscribe()
+			adapter.client.UnsubscribeAll(sub.subject)
 		}
 	})
 }
 
 func (adapter *NatsAdapter) Publish(subject string, message []byte) error {
 	return withConnectionCheck(adapter.client, func() {
-		adapter.client.Publish(subject, message)
+		adapter.client.Publish(subject, string(message))
 	})
 }
 
 func (adapter *NatsAdapter) Request(subject string, message []byte, callback func(payload []byte)) error {
 	return withConnectionCheck(adapter.client, func() {
-		inbox := nats.NewInbox()
-		msg := &nats.Msg{
-			Subject: subject,
-			Reply:   inbox,
-			Data:    message,
-		}
-
-		adapter.client.Subscribe(inbox, func(msg *nats.Msg) {
-			callback(msg.Data)
-			msg.Sub.Unsubscribe()
-		})
-
-		adapter.client.PublishMsg(msg)
+		inbox := adapter.createInbox()
+		adapter.Subscribe(inbox, callback)
+		adapter.client.PublishWithReplyTo(subject, string(message), inbox)
 	})
 }
 
@@ -120,6 +111,7 @@ func (adapter *NatsAdapter) RespondToChannel(subject string, replyCallback func(
 	} else {
 		return errors.New("No connection to Nats. Caching subscription...")
 	}
+
 	return nil
 }
 
@@ -129,28 +121,28 @@ func (adapter *NatsAdapter) Ping() bool {
 		return false
 	}
 
-	// Flush does a real nats Ping under the covers
-	err = adapter.client.Flush()
-	return err == nil
+	// TODO: silly
+	adapter.client.Ping()
+	return true
 }
 
-func withConnectionCheck(connection *nats.Conn, callback func()) error {
+func withConnectionCheck(connection *nats.Client, callback func()) error {
 	if connection == nil {
 		return errors.New("No connection to Nats")
 	}
+
 	callback()
 	return nil
 }
 
 func subscribeInNats(adapter *NatsAdapter, sub *Subscription) {
-	natsSub, _ := adapter.client.Subscribe(sub.subject, func(msg *nats.Msg) {
+	sid, _ := adapter.client.Subscribe(sub.subject, func(msg *nats.Message) {
 		if sub.reply != nil {
-			respondSubject := msg.Reply
-			response := sub.reply(msg.Data)
-			adapter.client.Publish(respondSubject, response)
+			adapter.client.Publish(msg.ReplyTo, string(sub.reply([]byte(msg.Payload))))
 		} else {
-			sub.callback(msg.Data)
+			sub.callback([]byte(msg.Payload))
 		}
 	})
-	sub.natsSubscription = natsSub
+
+	sub.id = sid
 }

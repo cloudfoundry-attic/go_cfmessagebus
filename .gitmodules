@@ -1,3 +1,6 @@
 [submodule "github.com/apcera/nats"]
 	path = github.com/apcera/nats
 	url = git@github.com:apcera/nats.git
+[submodule "src/github.com/vito/yagnats"]
+	path = src/github.com/vito/yagnats
+	url = https://github.com/vito/yagnats.git

@@ -1,0 +1,11 @@
+language: go
+go:
+  - 1.1
+  - tip
+
+install:
+  - gem install nats
+  - export GOPATH=$TRAVIS_BUILD_DIR
+  - go build ./...
+
+script: bin/test go_cfmessagebus

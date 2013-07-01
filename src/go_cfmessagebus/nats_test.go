@@ -3,7 +3,7 @@ package go_cfmessagebus
 import (
 	"errors"
 	"fmt"
-	nats "github.com/vito/yagnats"
+	nats "github.com/cloudfoundry/yagnats"
 	. "launchpad.net/gocheck"
 	"net"
 	exec "os/exec"

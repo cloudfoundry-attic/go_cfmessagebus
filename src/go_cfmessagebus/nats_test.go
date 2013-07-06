@@ -184,6 +184,56 @@ func (s *AdaptersSuite) TestRequestWithNoConnection(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
+func (s *AdaptersSuite) TestConnectedCallback(c *C) {
+	_, nats_cmd := before()
+	defer after(nats_cmd)
+
+	connectionChannel := make(chan bool)
+
+	adapter := NewNatsAdapter()
+	adapter.Configure("127.0.0.1", 4223, "nats", "nats")
+
+	adapter.ConnectedCallback = func() {
+		connectionChannel <- true
+	}
+
+	err := adapter.Connect()
+	c.Assert(err, IsNil)
+
+	withTimeout(connectionChannel, 1 * time.Second, func() {}, func() {
+		c.Error("Connected callback was not called!")
+	})
+}
+
+func (s *AdaptersSuite) TestReconnectedCallback(c *C) {
+	_, nats_cmd := before()
+	defer after(nats_cmd)
+
+	connectionChannel := make(chan bool)
+
+	adapter := NewNatsAdapter()
+	adapter.Configure("127.0.0.1", 4223, "nats", "nats")
+
+	adapter.ConnectedCallback = func() {
+		connectionChannel <- true
+	}
+
+	err := adapter.Connect()
+	c.Assert(err, IsNil)
+
+	withTimeout(connectionChannel, 1 * time.Second, func() {}, func() {
+		c.Error("Connected callback was not called!")
+	})
+
+	after(nats_cmd)
+	_, nats_cmd = before()
+	defer after(nats_cmd)
+
+	withTimeout(connectionChannel, 1 * time.Second, func() {}, func() {
+		c.Error("Connected callback was not called!")
+	})
+}
+
 func (s *AdaptersSuite) TestPubSubWhenNatsGoesDown(c *C) {
 	subscriber, nats_cmd := before()
 

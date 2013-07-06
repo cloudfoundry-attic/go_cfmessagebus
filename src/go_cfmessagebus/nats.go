@@ -16,6 +16,8 @@ type NatsAdapter struct {
 	password      string
 	subscriptions []*Subscription
 	rand          *rand.Rand
+
+	ConnectedCallback func()
 }
 
 type Subscription struct {
@@ -44,6 +46,12 @@ func (adapter *NatsAdapter) connect() error {
 	addr := fmt.Sprintf("%s:%d", adapter.host, adapter.port)
 
 	client := nats.NewClient()
+
+	client.ConnectedCallback = func() {
+		if adapter.ConnectedCallback != nil {
+			adapter.ConnectedCallback()
+		}
+	}
 
 	err := client.Connect(addr, adapter.user, adapter.password)
 	if err != nil {

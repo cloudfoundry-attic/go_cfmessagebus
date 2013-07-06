@@ -193,9 +193,9 @@ func (s *AdaptersSuite) TestConnectedCallback(c *C) {
 	adapter := NewNatsAdapter()
 	adapter.Configure("127.0.0.1", 4223, "nats", "nats")
 
-	adapter.ConnectedCallback = func() {
+	adapter.OnConnect(func() {
 		connectionChannel <- true
-	}
+	})
 
 	err := adapter.Connect()
 	c.Assert(err, IsNil)
@@ -214,9 +214,9 @@ func (s *AdaptersSuite) TestReconnectedCallback(c *C) {
 	adapter := NewNatsAdapter()
 	adapter.Configure("127.0.0.1", 4223, "nats", "nats")
 
-	adapter.ConnectedCallback = func() {
+	adapter.OnConnect(func() {
 		connectionChannel <- true
-	}
+	})
 
 	err := adapter.Connect()
 	c.Assert(err, IsNil)

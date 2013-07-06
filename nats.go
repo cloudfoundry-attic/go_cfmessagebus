@@ -17,7 +17,7 @@ type NatsAdapter struct {
 	subscriptions []*Subscription
 	rand          *rand.Rand
 
-	ConnectedCallback func()
+	connectedCallback func()
 }
 
 type Subscription struct {
@@ -42,14 +42,18 @@ func (adapter *NatsAdapter) Connect() error {
 	return adapter.connect()
 }
 
+func (adapter *NatsAdapter) OnConnect(callback func()) {
+	adapter.connectedCallback = callback
+}
+
 func (adapter *NatsAdapter) connect() error {
 	addr := fmt.Sprintf("%s:%d", adapter.host, adapter.port)
 
 	client := nats.NewClient()
 
 	client.ConnectedCallback = func() {
-		if adapter.ConnectedCallback != nil {
-			adapter.ConnectedCallback()
+		if adapter.connectedCallback != nil {
+			adapter.connectedCallback()
 		}
 	}
 

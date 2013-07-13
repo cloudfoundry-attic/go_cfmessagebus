@@ -184,6 +184,22 @@ func (s *AdaptersSuite) TestRequestWithNoConnection(c *C) {
 	c.Assert(err, Not(IsNil))
 }
 
+func (s *AdaptersSuite) TestSettingLogger(c *C) {
+	_, nats_cmd := before()
+	defer after(nats_cmd)
+
+	adapter := NewNatsAdapter()
+	adapter.Configure("127.0.0.1", 4223, "nats", "nats")
+
+	logger := &DefaultLogger{}
+	adapter.SetLogger(logger)
+
+	err := adapter.Connect()
+	c.Assert(err, IsNil)
+
+	c.Assert(adapter.client.Logger, Equals, logger)
+}
+
 func (s *AdaptersSuite) TestConnectedCallback(c *C) {
 	_, nats_cmd := before()
 	defer after(nats_cmd)
@@ -200,7 +216,7 @@ func (s *AdaptersSuite) TestConnectedCallback(c *C) {
 	err := adapter.Connect()
 	c.Assert(err, IsNil)
 
-	withTimeout(connectionChannel, 1 * time.Second, func() {}, func() {
+	withTimeout(connectionChannel, 1*time.Second, func() {}, func() {
 		c.Error("Connected callback was not called!")
 	})
 }
@@ -221,7 +237,7 @@ func (s *AdaptersSuite) TestReconnectedCallback(c *C) {
 	err := adapter.Connect()
 	c.Assert(err, IsNil)
 
-	withTimeout(connectionChannel, 1 * time.Second, func() {}, func() {
+	withTimeout(connectionChannel, 1*time.Second, func() {}, func() {
 		c.Error("Connected callback was not called!")
 	})
 
@@ -229,7 +245,7 @@ func (s *AdaptersSuite) TestReconnectedCallback(c *C) {
 	_, nats_cmd = before()
 	defer after(nats_cmd)
 
-	withTimeout(connectionChannel, 1 * time.Second, func() {}, func() {
+	withTimeout(connectionChannel, 1*time.Second, func() {}, func() {
 		c.Error("Connected callback was not called!")
 	})
 }

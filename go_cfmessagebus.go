@@ -14,6 +14,7 @@ type CFMessageBus interface {
 	Ping() bool
 	RespondToChannel(subject string, callback func(request []byte) []byte) error
 	OnConnect(func())
+	SetLogger(Logger)
 }
 
 // MyError is an error implementation that includes a time and message.

@@ -18,6 +18,7 @@ type NatsAdapter struct {
 	rand          *rand.Rand
 
 	connectedCallback func()
+	logger            Logger
 }
 
 type Subscription struct {
@@ -46,6 +47,10 @@ func (adapter *NatsAdapter) OnConnect(callback func()) {
 	adapter.connectedCallback = callback
 }
 
+func (adapter *NatsAdapter) SetLogger(logger Logger) {
+	adapter.logger = logger
+}
+
 func (adapter *NatsAdapter) connect() error {
 	addr := fmt.Sprintf("%s:%d", adapter.host, adapter.port)
 
@@ -55,6 +60,10 @@ func (adapter *NatsAdapter) connect() error {
 		if adapter.connectedCallback != nil {
 			adapter.connectedCallback()
 		}
+	}
+
+	if adapter.logger != nil {
+		client.Logger = adapter.logger
 	}
 
 	err := client.Connect(addr, adapter.user, adapter.password)

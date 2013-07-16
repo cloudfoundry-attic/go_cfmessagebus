@@ -66,7 +66,12 @@ func (adapter *NatsAdapter) connect() error {
 		client.Logger = adapter.logger
 	}
 
-	err := client.Connect(addr, adapter.user, adapter.password)
+	err := client.Connect(&nats.ConnectionInfo{
+		Addr: addr,
+		Username: adapter.user,
+		Password: adapter.password,
+	})
+
 	if err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-package go_cfmessagebus
+package cfmessagebus
 
 import (
 	"errors"
@@ -67,7 +67,7 @@ func (adapter *NatsAdapter) connect() error {
 	}
 
 	err := client.Connect(&nats.ConnectionInfo{
-		Addr: addr,
+		Addr:     addr,
 		Username: adapter.user,
 		Password: adapter.password,
 	})

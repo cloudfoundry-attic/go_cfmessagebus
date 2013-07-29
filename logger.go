@@ -1,4 +1,4 @@
-package go_cfmessagebus
+package cfmessagebus
 
 type Logger interface {
 	Fatal(string)

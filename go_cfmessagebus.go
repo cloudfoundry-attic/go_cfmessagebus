@@ -1,10 +1,10 @@
-package go_cfmessagebus
+package cfmessagebus
 
 import (
 	"fmt"
 )
 
-type CFMessageBus interface {
+type MessageBus interface {
 	Configure(host string, port int, user string, password string)
 	Connect() error
 	Subscribe(subject string, callback func(payload []byte)) error
@@ -26,7 +26,7 @@ func (e WrongAdapterError) Error() string {
 	return fmt.Sprintf("Adapter: %s not found", e.badAdapter)
 }
 
-func NewCFMessageBus(adapter string) (CFMessageBus, error) {
+func NewMessageBus(adapter string) (MessageBus, error) {
 	if adapter == "NATS" {
 		return NewNatsAdapter(), nil
 	}

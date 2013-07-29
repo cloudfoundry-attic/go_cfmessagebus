@@ -113,5 +113,5 @@ func (m *MockMessageBus) OnConnect(callback func()) {
 	m.onConnect = callback
 }
 
-func (m *MockMessageBus) SetLogger(logger go_cfmessagebus.Logger) {
+func (m *MockMessageBus) SetLogger(logger cfmessagebus.Logger) {
 }

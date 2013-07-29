@@ -1,4 +1,4 @@
-package go_cfmessagebus
+package cfmessagebus
 
 import (
 	. "launchpad.net/gocheck"
@@ -7,10 +7,10 @@ import (
 
 func Test(t *testing.T) { TestingT(t) }
 
-type CFMessageBusSuite struct{}
+type MessageBusSuite struct{}
 
-var _ = Suite(&CFMessageBusSuite{})
+var _ = Suite(&MessageBusSuite{})
 
-func (s *CFMessageBusSuite) TestNothing(c *C) {
+func (s *MessageBusSuite) TestNothing(c *C) {
 	c.Check(1, Equals, 1)
 }

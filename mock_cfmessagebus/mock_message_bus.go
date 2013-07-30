@@ -9,8 +9,9 @@ import (
 type MockMessageBus struct {
 	subscriptions map[string]func([]byte, string)
 	onConnect     func()
+	onPing				func() bool
 
-	lock sync.RWMutex
+	sync.RWMutex
 }
 
 func NewMockMessageBus() *MockMessageBus {
@@ -23,8 +24,8 @@ func (m *MockMessageBus) Configure(host string, port int, user, password string)
 }
 
 func (m *MockMessageBus) Connect() error {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	if m.onConnect != nil {
 		m.onConnect()
@@ -34,8 +35,8 @@ func (m *MockMessageBus) Connect() error {
 }
 
 func (m *MockMessageBus) Subscribe(subject string, callback func([]byte)) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	m.subscriptions[subject] = func(payload []byte, reply string) {
 		callback(payload)
@@ -45,16 +46,16 @@ func (m *MockMessageBus) Subscribe(subject string, callback func([]byte)) error 
 }
 
 func (m *MockMessageBus) UnsubscribeAll() error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	m.subscriptions = make(map[string]func([]byte, string))
 	return nil
 }
 
 func (m *MockMessageBus) Publish(subject string, message []byte) error {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	m.publishWithReply(subject, message, "")
 
@@ -78,12 +79,16 @@ func (m *MockMessageBus) Request(subject string, message []byte, callback func([
 }
 
 func (m *MockMessageBus) Ping() bool {
+	if m.onPing != nil {
+		return m.onPing()
+	}
+
 	return true
 }
 
 func (m *MockMessageBus) RespondToChannel(subject string, callback func([]byte) []byte) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	m.subscriptions[subject] = func(payload []byte, reply string) {
 		m.Publish(reply, callback(payload))
@@ -93,8 +98,8 @@ func (m *MockMessageBus) RespondToChannel(subject string, callback func([]byte) 
 }
 
 func (m *MockMessageBus) publishWithReply(subject string, message []byte, reply string) {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	callback, present := m.subscriptions[subject]
 	if !present {
@@ -107,10 +112,17 @@ func (m *MockMessageBus) publishWithReply(subject string, message []byte, reply 
 }
 
 func (m *MockMessageBus) OnConnect(callback func()) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	m.onConnect = callback
+}
+
+func (m *MockMessageBus) OnPing(callback func() bool) {
+	m.Lock()
+	defer m.Unlock()
+
+	m.onPing = callback
 }
 
 func (m *MockMessageBus) SetLogger(logger cfmessagebus.Logger) {

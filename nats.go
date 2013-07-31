@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	nats "github.com/cloudfoundry/yagnats"
+	"github.com/nu7hatch/gouuid"
 	"math/rand"
 	"time"
+
 )
 
 type NatsAdapter struct {
@@ -86,10 +88,13 @@ func (adapter *NatsAdapter) connect() error {
 	return nil
 }
 
-func (adapter *NatsAdapter) createInbox() string {
-	return fmt.Sprintf("_INBOX.%04x%04x%04x%04x%04x%06x",
-		adapter.rand.Int31n(0x10000), adapter.rand.Int31n(0x10000), adapter.rand.Int31n(0x10000),
-		adapter.rand.Int31n(0x10000), adapter.rand.Int31n(0x10000), adapter.rand.Int31n(0x1000000))
+func (adapter *NatsAdapter) createInbox() (string, error) {
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("_INBOX.%s", uuid), nil
 }
 
 func (adapter *NatsAdapter) Subscribe(subject string, callback func(payload []byte)) error {
@@ -106,24 +111,29 @@ func (adapter *NatsAdapter) Subscribe(subject string, callback func(payload []by
 }
 
 func (adapter *NatsAdapter) UnsubscribeAll() error {
-	return withConnectionCheck(adapter.client, func() {
+	return withConnectionCheck(adapter.client, func() error {
 		for _, sub := range adapter.subscriptions {
 			adapter.client.UnsubscribeAll(sub.subject)
 		}
+		return nil
 	})
 }
 
 func (adapter *NatsAdapter) Publish(subject string, message []byte) error {
-	return withConnectionCheck(adapter.client, func() {
-		adapter.client.Publish(subject, string(message))
+	return withConnectionCheck(adapter.client, func() error {
+		return adapter.client.Publish(subject, string(message))
 	})
 }
 
 func (adapter *NatsAdapter) Request(subject string, message []byte, callback func(payload []byte)) error {
-	return withConnectionCheck(adapter.client, func() {
-		inbox := adapter.createInbox()
+	return withConnectionCheck(adapter.client, func() error {
+		inbox, err := adapter.createInbox()
+		if err != nil {
+			return err
+		}
+
 		adapter.Subscribe(inbox, callback)
-		adapter.client.PublishWithReplyTo(subject, string(message), inbox)
+		return adapter.client.PublishWithReplyTo(subject, string(message), inbox)
 	})
 }
 
@@ -144,13 +154,12 @@ func (adapter *NatsAdapter) Ping() bool {
 	return adapter.client.Ping()
 }
 
-func withConnectionCheck(connection *nats.Client, callback func()) error {
+func withConnectionCheck(connection *nats.Client, callback func() error) error {
 	if connection == nil {
 		return errors.New("No connection to Nats")
 	}
 
-	callback()
-	return nil
+	return callback()
 }
 
 func subscribeInNats(adapter *NatsAdapter, sub *Subscription) {

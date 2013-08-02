@@ -275,11 +275,11 @@ func (s *AdaptersSuite) TestRequest(c *C) {
 }
 
 func (s *AdaptersSuite) TestRespondToChannel(c *C) {
-	err := s.Adapter.Connect()
+	requestAdapter := s.configuredAdapter()
+	err := requestAdapter.Connect()
 	c.Assert(err, IsNil)
 
 	respondAdapter := s.configuredAdapter()
-
 	err = respondAdapter.Connect()
 	c.Assert(err, IsNil)
 
@@ -293,7 +293,7 @@ func (s *AdaptersSuite) TestRespondToChannel(c *C) {
 
 	request := "HELLO"
 	responseChannel := make(chan bool, 1)
-	s.Adapter.Request(channel, []byte(request), func(response []byte) {
+	requestAdapter.Request(channel, []byte(request), func(response []byte) {
 		c.Check(string(response), Equals, "hello")
 		responseChannel <- true
 	})
@@ -302,11 +302,11 @@ func (s *AdaptersSuite) TestRespondToChannel(c *C) {
 }
 
 func (s *AdaptersSuite) TestRespondToChannelWithEmptyReplyChannelIgnoresMessage(c *C) {
-	err := s.Adapter.Connect()
+	requestAdapter := s.configuredAdapter()
+	err := requestAdapter.Connect()
 	c.Assert(err, IsNil)
 
 	respondAdapter := s.configuredAdapter()
-
 	err = respondAdapter.Connect()
 	c.Assert(err, IsNil)
 
@@ -318,7 +318,7 @@ func (s *AdaptersSuite) TestRespondToChannelWithEmptyReplyChannelIgnoresMessage(
 		return []byte{}
 	})
 
-	s.Adapter.Publish(channel, []byte("HELLO"))
+	requestAdapter.Publish(channel, []byte("HELLO"))
 
 	failOnEvent(responseChannel, 1*time.Second, func() {})
 }

@@ -28,6 +28,22 @@ func StopNats(cmd *exec.Cmd) {
 	cmd.Wait()
 }
 
+func GrabEphemeralPort() (int, error) {
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return 0, err
+	}
+
+	defer listener.Close()
+
+	_, portStr, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		return 0, err
+	}
+
+	return strconv.Atoi(portStr)
+}
+
 func waitUntilNatsUp(port int) error {
 	maxWait := 10
 	for i := 0; i < maxWait; i++ {

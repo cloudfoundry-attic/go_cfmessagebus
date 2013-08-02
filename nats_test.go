@@ -32,7 +32,10 @@ func NatsRequestResponder(adapter *NatsAdapter, request_subject string, subscrib
 }
 
 func (s *AdaptersSuite) SetUpTest(c *C) {
-	port := 4223
+	port, err := GrabEphemeralPort()
+	if err != nil {
+		port = 4223
+	}
 
 	s.startNats(port)
 
@@ -100,7 +103,7 @@ func (s *AdaptersSuite) TestConnectReturnsNilOnSuccess(c *C) {
 
 func (s *AdaptersSuite) TestConnectReturnsErrOnFailure(c *C) {
 	s.stopNats()
-	c.Check(s.Adapter.Connect(), ErrorMatches, "dial tcp 127.0.0.1:4223: connection refused")
+	c.Check(s.Adapter.Connect(), ErrorMatches, "dial tcp .* connection refused")
 }
 
 func (s *AdaptersSuite) TestSubscribe(c *C) {

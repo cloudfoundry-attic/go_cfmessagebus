@@ -3,17 +3,17 @@ package cfmessagebus
 import (
 	"fmt"
 	nats "github.com/cloudfoundry/yagnats"
+	. "launchpad.net/gocheck"
 	exec "os/exec"
 	"strings"
 	"time"
-	. "launchpad.net/gocheck"
 )
 
-type AdaptersSuite struct{
+type AdaptersSuite struct {
 	Adapter *NatsAdapter
 
 	natsPort int
-	natsCmd *exec.Cmd
+	natsCmd  *exec.Cmd
 }
 
 var _ = Suite(&AdaptersSuite{})
@@ -195,7 +195,7 @@ func (s *AdaptersSuite) TestConnectedCallback(c *C) {
 
 func (s *AdaptersSuite) TestReconnectedCallback(c *C) {
 	connectionChannel := make(chan bool)
-	
+
 	s.Adapter.OnConnect(func() {
 		connectionChannel <- true
 	})

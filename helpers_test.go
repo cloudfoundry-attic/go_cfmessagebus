@@ -3,12 +3,12 @@ package cfmessagebus
 import (
 	"errors"
 	"fmt"
+	. "launchpad.net/gocheck"
 	"net"
 	"os/exec"
 	"strconv"
-	"time"
-	. "launchpad.net/gocheck"
 	"testing"
+	"time"
 )
 
 func Test(t *testing.T) { TestingT(t) }

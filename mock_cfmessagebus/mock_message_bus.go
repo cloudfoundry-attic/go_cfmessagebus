@@ -9,7 +9,7 @@ import (
 type MockMessageBus struct {
 	subscriptions map[string]func([]byte, string)
 	onConnect     func()
-	onPing				func() bool
+	onPing        func() bool
 
 	sync.RWMutex
 }

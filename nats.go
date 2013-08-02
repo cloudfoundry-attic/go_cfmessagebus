@@ -7,7 +7,6 @@ import (
 	"github.com/nu7hatch/gouuid"
 	"math/rand"
 	"time"
-
 )
 
 type NatsAdapter struct {
@@ -151,7 +150,11 @@ func (adapter *NatsAdapter) RespondToChannel(subject string, replyCallback func(
 }
 
 func (adapter *NatsAdapter) Ping() bool {
-	return adapter.client.Ping()
+	if adapter.client == nil {
+		return false
+	} else {
+		return adapter.client.Ping()
+	}
 }
 
 func withConnectionCheck(connection *nats.Client, callback func() error) error {
@@ -165,11 +168,19 @@ func withConnectionCheck(connection *nats.Client, callback func() error) error {
 func subscribeInNats(adapter *NatsAdapter, sub *Subscription) {
 	sid, _ := adapter.client.Subscribe(sub.subject, func(msg *nats.Message) {
 		if sub.reply != nil {
-			adapter.client.Publish(msg.ReplyTo, string(sub.reply([]byte(msg.Payload))))
+			adapter.replyToMessage(msg, sub.reply)
 		} else {
 			sub.callback([]byte(msg.Payload))
 		}
 	})
 
 	sub.id = sid
+}
+
+func (a *NatsAdapter) replyToMessage(msg *nats.Message, callback func([]byte) []byte) {
+	if msg.ReplyTo == "" {
+		return
+	}
+
+	a.client.Publish(msg.ReplyTo, string(callback([]byte(msg.Payload))))
 }

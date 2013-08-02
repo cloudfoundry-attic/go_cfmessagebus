@@ -1,56 +1,22 @@
 package cfmessagebus
 
 import (
-	"errors"
 	"fmt"
 	nats "github.com/cloudfoundry/yagnats"
-	. "launchpad.net/gocheck"
-	"net"
 	exec "os/exec"
 	"strings"
 	"time"
+	. "launchpad.net/gocheck"
 )
 
-type AdaptersSuite struct{}
+type AdaptersSuite struct{
+	Adapter *NatsAdapter
+
+	natsPort int
+	natsCmd *exec.Cmd
+}
 
 var _ = Suite(&AdaptersSuite{})
-
-func waitUntilNatsDown(port int) error {
-	maxWait := 10
-	for i := 0; i < maxWait; i++ {
-		time.Sleep(500 * time.Millisecond)
-		_, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-		if err != nil {
-			return nil
-		}
-	}
-	return errors.New("Waited too long for NATS to stop")
-}
-
-func failOnTimeout(successChan chan bool, timeout time.Duration, onSuccess func()) {
-	onTimeout := func() { panic("Timed out") }
-	withTimeout(successChan, timeout, onSuccess, onTimeout)
-}
-
-func failOnEvent(eventChan chan bool, timeout time.Duration, onTimeout func()) {
-	onEvent := func() { panic("Event should not have happened") }
-	withTimeout(eventChan, timeout, onEvent, onTimeout)
-}
-
-func withTimeout(successChan chan bool, timeout time.Duration, onSuccess func(), onTimeout func()) {
-	timeoutChan := make(chan bool, 1)
-	go func() {
-		time.Sleep(timeout)
-		timeoutChan <- true
-	}()
-
-	select {
-	case <-successChan:
-		onSuccess()
-	case <-timeoutChan:
-		onTimeout()
-	}
-}
 
 func NatsRequestResponder(adapter *NatsAdapter, request_subject string, subscribeChan chan bool) {
 	serverAdapter := NewNatsAdapter()
@@ -65,96 +31,116 @@ func NatsRequestResponder(adapter *NatsAdapter, request_subject string, subscrib
 	subscribeChan <- true
 }
 
-func before() (*NatsAdapter, *exec.Cmd) {
+func (s *AdaptersSuite) SetUpTest(c *C) {
 	port := 4223
-	cmd := StartNats(port)
 
-	adapter := NewNatsAdapter()
-	adapter.Configure("127.0.0.1", port, "nats", "nats")
-	adapter.Connect()
+	s.startNats(port)
 
-	return adapter, cmd
+	s.Adapter = s.configuredAdapter()
 }
 
-func after(cmd *exec.Cmd) {
-	StopNats(cmd)
+func (s *AdaptersSuite) TearDownTest(c *C) {
+	if s.natsCmd != nil {
+		s.stopNats()
+	}
+}
+
+func (s *AdaptersSuite) startNats(port int) {
+	s.natsPort = port
+	s.natsCmd = StartNats(port)
+
+	err := waitUntilNatsUp(port)
+	if err != nil {
+		panic("cannot connect to NATS")
+	}
+}
+
+func (s *AdaptersSuite) stopNats() {
+	StopNats(s.natsCmd)
+
+	err := waitUntilNatsDown(s.natsPort)
+	if err != nil {
+		panic("cannot shut down NATS")
+	}
+
+	s.natsPort = 0
+	s.natsCmd = nil
+}
+
+func (s *AdaptersSuite) restartNats() {
+	port := s.natsPort
+	s.stopNats()
+	s.startNats(port)
+}
+
+func (s *AdaptersSuite) configuredAdapter() *NatsAdapter {
+	adapter := NewNatsAdapter()
+	adapter.Configure("127.0.0.1", s.natsPort, "nats", "nats")
+	return adapter
+}
+
+func (s *AdaptersSuite) TestPingWhenNotConnected(c *C) {
+	c.Check(s.Adapter.Ping(), Equals, false)
 }
 
 func (s *AdaptersSuite) TestPingWhenNatsIsRunning(c *C) {
-	adapter, cmd := before()
-	defer after(cmd)
-
-	reachable := adapter.Ping()
-	c.Check(reachable, Equals, true)
+	err := s.Adapter.Connect()
+	c.Assert(err, IsNil)
+	c.Assert(s.Adapter.Ping(), Equals, true)
 }
 
 func (s *AdaptersSuite) TestPingWhenNatsIsNotRunning(c *C) {
-	adapter, cmd := before()
-	after(cmd)
-
-	reachable := adapter.Ping()
-	c.Check(reachable, Equals, false)
+	s.stopNats()
+	c.Check(s.Adapter.Ping(), Equals, false)
 }
 
 func (s *AdaptersSuite) TestConnectReturnsNilOnSuccess(c *C) {
-	port := 4223
-	cmd := StartNats(port)
-	defer after(cmd)
-
-	adapter := NewNatsAdapter()
-	adapter.Configure("127.0.0.1", port, "nats", "nats")
-
-	c.Check(adapter.Connect(), IsNil)
+	c.Check(s.Adapter.Connect(), IsNil)
 }
 
 func (s *AdaptersSuite) TestConnectReturnsErrOnFailure(c *C) {
-	adapter := NewNatsAdapter()
-	adapter.Configure("127.0.0.1", 4223, "nats", "nats")
-
-	c.Check(adapter.Connect(), ErrorMatches, "dial tcp 127.0.0.1:4223: connection refused")
+	s.stopNats()
+	c.Check(s.Adapter.Connect(), ErrorMatches, "dial tcp 127.0.0.1:4223: connection refused")
 }
 
 func (s *AdaptersSuite) TestSubscribe(c *C) {
-	adapter, nats_cmd := before()
-	defer after(nats_cmd)
-
 	receivedChan := make(chan bool, 1)
 
 	messagesReceived := make([]string, 0)
-	adapter.Subscribe("some-message", func(payload []byte) {
+
+	err := s.Adapter.Connect()
+	c.Assert(err, IsNil)
+
+	s.Adapter.Subscribe("some-message", func(payload []byte) {
 		messagesReceived = append(messagesReceived, string(payload))
 		receivedChan <- true
 	})
 
-	adapter.Publish("some-message", []byte("This is a message"))
+	s.Adapter.Publish("some-message", []byte("This is a message"))
 
 	failOnTimeout(receivedChan, 1*time.Second, func() {
-		c.Check(len(messagesReceived), Equals, 1)
-		c.Check(messagesReceived[0], Equals, "This is a message")
+		c.Check(messagesReceived, DeepEquals, []string{"This is a message"})
 	})
 }
 
-func (s *AdaptersSuite) TestSubscribeWithNoConnection(c *C) {
-	adapter := NewNatsAdapter()
-	adapter.Configure("127.0.0.1", 4222, "nats", "nats")
-
+func (s *AdaptersSuite) TestSubscribeWithNoConnectionCachesSubscriptions(c *C) {
 	receivedChan := make(chan bool, 1)
+
 	messagesReceived := make([]string, 0)
-	err := adapter.Subscribe("some-message", func(payload []byte) {
+
+	err := s.Adapter.Subscribe("some-message", func(payload []byte) {
 		messagesReceived = append(messagesReceived, string(payload))
 		receivedChan <- true
 	})
-	c.Assert(err, Not(IsNil))
+	c.Assert(err, NotNil)
 
-	cmd := StartNats(4222)
-	defer after(cmd)
-	adapter.Connect()
+	err = s.Adapter.Connect()
+	c.Assert(err, IsNil)
 
-	adapter.Publish("some-message", []byte("This is a message"))
+	s.Adapter.Publish("some-message", []byte("This is a message"))
 
 	failOnTimeout(receivedChan, 1*time.Second, func() {
-		c.Check(len(messagesReceived), Equals, 1)
-		c.Check(messagesReceived[0], Equals, "This is a message")
+		c.Check(messagesReceived, DeepEquals, []string{"This is a message"})
 	})
 }
 
@@ -185,118 +171,90 @@ func (s *AdaptersSuite) TestRequestWithNoConnection(c *C) {
 }
 
 func (s *AdaptersSuite) TestSettingLogger(c *C) {
-	_, nats_cmd := before()
-	defer after(nats_cmd)
-
-	adapter := NewNatsAdapter()
-	adapter.Configure("127.0.0.1", 4223, "nats", "nats")
-
 	logger := &DefaultLogger{}
-	adapter.SetLogger(logger)
+	s.Adapter.SetLogger(logger)
 
-	err := adapter.Connect()
+	err := s.Adapter.Connect()
 	c.Assert(err, IsNil)
 
-	c.Assert(adapter.client.Logger, Equals, logger)
+	c.Assert(s.Adapter.client.Logger, Equals, logger)
 }
 
 func (s *AdaptersSuite) TestConnectedCallback(c *C) {
-	_, nats_cmd := before()
-	defer after(nats_cmd)
-
 	connectionChannel := make(chan bool)
 
-	adapter := NewNatsAdapter()
-	adapter.Configure("127.0.0.1", 4223, "nats", "nats")
-
-	adapter.OnConnect(func() {
+	s.Adapter.OnConnect(func() {
 		connectionChannel <- true
 	})
 
-	err := adapter.Connect()
+	err := s.Adapter.Connect()
 	c.Assert(err, IsNil)
 
-	withTimeout(connectionChannel, 1*time.Second, func() {}, func() {
-		c.Error("Connected callback was not called!")
-	})
+	failOnTimeout(connectionChannel, 1*time.Second, func() {})
 }
 
 func (s *AdaptersSuite) TestReconnectedCallback(c *C) {
-	_, nats_cmd := before()
-	defer after(nats_cmd)
-
 	connectionChannel := make(chan bool)
-
-	adapter := NewNatsAdapter()
-	adapter.Configure("127.0.0.1", 4223, "nats", "nats")
-
-	adapter.OnConnect(func() {
+	
+	s.Adapter.OnConnect(func() {
 		connectionChannel <- true
 	})
 
-	err := adapter.Connect()
+	err := s.Adapter.Connect()
 	c.Assert(err, IsNil)
 
-	withTimeout(connectionChannel, 1*time.Second, func() {}, func() {
-		c.Error("Connected callback was not called!")
-	})
+	failOnTimeout(connectionChannel, 1*time.Second, func() {})
 
-	after(nats_cmd)
-	_, nats_cmd = before()
-	defer after(nats_cmd)
+	s.restartNats()
 
-	withTimeout(connectionChannel, 1*time.Second, func() {}, func() {
-		c.Error("Connected callback was not called!")
-	})
+	failOnTimeout(connectionChannel, 1*time.Second, func() {})
 }
 
 func (s *AdaptersSuite) TestPubSubWhenNatsGoesDown(c *C) {
-	subscriber, nats_cmd := before()
+	publisher := s.configuredAdapter()
+	err := publisher.Connect()
+	c.Assert(err, IsNil)
+
+	subscriber := s.configuredAdapter()
+	err = subscriber.Connect()
+	c.Assert(err, IsNil)
 
 	messagesReceived := make([]string, 0)
 	receivedChan := make(chan bool, 1)
+
 	subscriber.Subscribe("some-message", func(payload []byte) {
 		messagesReceived = append(messagesReceived, string(payload))
 		receivedChan <- true
 	})
 
-	publisher := NewNatsAdapter()
-	publisher.Configure("127.0.0.1", subscriber.port, "nats", "nats")
-	publisher.Connect()
+	s.restartNats()
 
-	StopNats(nats_cmd)
-	waitUntilNatsDown(subscriber.port)
+	// wait a little bit to give us time to resubscribe
+	time.Sleep(1 * time.Second)
 
-	time.Sleep(21 * time.Second)
-
-	nats_cmd = StartNats(subscriber.port)
-	defer after(nats_cmd)
-
-	time.Sleep(2 * time.Second)
-
-	publisher.Publish("some-message", []byte("This is a message"))
+	publisher.Publish("some-message", []byte("some message"))
 
 	failOnTimeout(receivedChan, 3*time.Second, func() {
-		c.Check(len(messagesReceived), Equals, 1)
-		c.Check(messagesReceived[0], Equals, "This is a message")
+		c.Check(messagesReceived, DeepEquals, []string{"some message"})
 	})
 
 	subscriber.UnsubscribeAll()
 
 	publisher.Publish("some-message", []byte("message 2"))
+
 	failOnEvent(receivedChan, 1*time.Second, func() {})
 
 	c.Check(len(messagesReceived), Equals, 1)
 }
 
 func (s *AdaptersSuite) TestRequest(c *C) {
-	adapter, nats_cmd := before()
-	defer after(nats_cmd)
+	err := s.Adapter.Connect()
+	c.Assert(err, IsNil)
 
-	request_subject := "request_subject"
+	request_subject := "request-subject"
 	subscribeBarrier := make(chan bool, 1)
 
-	go NatsRequestResponder(adapter, request_subject, subscribeBarrier)
+	go NatsRequestResponder(s.Adapter, request_subject, subscribeBarrier)
 
 	messagesReceived := make([]string, 0)
 	receivedChan := make(chan bool, 1)
@@ -306,23 +264,23 @@ func (s *AdaptersSuite) TestRequest(c *C) {
 	}
 
 	<-subscribeBarrier
-	adapter.Request(request_subject, []byte("request"), callback)
+	s.Adapter.Request(request_subject, []byte("request"), callback)
 
 	failOnTimeout(receivedChan, 1*time.Second, func() {
-		c.Check(len(messagesReceived), Equals, 1)
-		c.Check(messagesReceived[0], Equals, "Response")
+		c.Check(messagesReceived, DeepEquals, []string{"Response"})
 	})
 }
 
 func (s *AdaptersSuite) TestRespondToChannel(c *C) {
-	requestAdapter, cmd := before()
-	defer after(cmd)
+	err := s.Adapter.Connect()
+	c.Assert(err, IsNil)
+
+	respondAdapter := s.configuredAdapter()
+
+	err = respondAdapter.Connect()
+	c.Assert(err, IsNil)
 
 	channel := "request-chan"
-
-	respondAdapter := NewNatsAdapter()
-	respondAdapter.Configure(requestAdapter.host, requestAdapter.port, requestAdapter.user, requestAdapter.password)
-	respondAdapter.Connect()
 
 	respondAdapter.RespondToChannel(channel, func(req []byte) []byte {
 		req_string := string(req)
@@ -332,7 +290,7 @@ func (s *AdaptersSuite) TestRespondToChannel(c *C) {
 
 	request := "HELLO"
 	responseChannel := make(chan bool, 1)
-	requestAdapter.Request(channel, []byte(request), func(response []byte) {
+	s.Adapter.Request(channel, []byte(request), func(response []byte) {
 		c.Check(string(response), Equals, "hello")
 		responseChannel <- true
 	})
@@ -340,23 +298,46 @@ func (s *AdaptersSuite) TestRespondToChannel(c *C) {
 	failOnTimeout(responseChannel, 2*time.Second, func() {})
 }
 
-func (s *AdaptersSuite) TestRespondToChannelWithNoConnection(c *C) {
-	respondAdapter := NewNatsAdapter()
-	respondAdapter.Configure("127.0.0.1", 4223, "nats", "nats")
+func (s *AdaptersSuite) TestRespondToChannelWithEmptyReplyChannelIgnoresMessage(c *C) {
+	err := s.Adapter.Connect()
+	c.Assert(err, IsNil)
+
+	respondAdapter := s.configuredAdapter()
+
+	err = respondAdapter.Connect()
+	c.Assert(err, IsNil)
+
+	channel := "request-chan"
+	responseChannel := make(chan bool, 1)
+
+	respondAdapter.RespondToChannel(channel, func(req []byte) []byte {
+		responseChannel <- true
+		return []byte{}
+	})
+
+	s.Adapter.Publish(channel, []byte("HELLO"))
+
+	failOnEvent(responseChannel, 1*time.Second, func() {})
+}
+
+func (s *AdaptersSuite) TestRespondToChannelSetupBeforeConnection(c *C) {
+	requestAdapter := s.configuredAdapter()
+	err := requestAdapter.Connect()
+	c.Assert(err, IsNil)
+
+	respondAdapter := s.configuredAdapter()
 
 	channel := "request-chan"
 
-	err := respondAdapter.RespondToChannel(channel, func(req []byte) []byte {
+	err = respondAdapter.RespondToChannel(channel, func(req []byte) []byte {
 		req_string := string(req)
 		res_string := strings.ToLower(req_string)
 		return []byte(res_string)
 	})
-	c.Assert(err, Not(IsNil))
+	c.Assert(err, NotNil)
 
-	requestAdapter, cmd := before()
-	defer after(cmd)
-
-	respondAdapter.Connect()
+	err = respondAdapter.Connect()
+	c.Assert(err, IsNil)
 
 	request := "HELLO"
 	responseChannel := make(chan bool, 1)

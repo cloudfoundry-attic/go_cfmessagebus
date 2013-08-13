@@ -57,7 +57,16 @@ func (m *MockMessageBus) Publish(subject string, message []byte) error {
 	m.RLock()
 	defer m.RUnlock()
 
-	m.publishWithReply(subject, message, "")
+	m.publishWithReply(subject, message, "", false)
+
+	return nil
+}
+
+func (m *MockMessageBus) PublishSync(subject string, message []byte) error {
+	m.RLock()
+	defer m.RUnlock()
+
+	m.publishWithReply(subject, message, "", true)
 
 	return nil
 }
@@ -73,7 +82,23 @@ func (m *MockMessageBus) Request(subject string, message []byte, callback func([
 		return err
 	}
 
-	m.publishWithReply(subject, message, reply.String())
+	m.publishWithReply(subject, message, reply.String(), false)
+
+	return nil
+}
+
+func (m *MockMessageBus) RequestSync(subject string, message []byte, callback func([]byte)) error {
+	reply, err := uuid.NewV4()
+	if err != nil {
+		return err
+	}
+
+	err = m.Subscribe(reply.String(), callback)
+	if err != nil {
+		return err
+	}
+
+	m.publishWithReply(subject, message, reply.String(), true)
 
 	return nil
 }
@@ -97,7 +122,7 @@ func (m *MockMessageBus) RespondToChannel(subject string, callback func([]byte) 
 	return nil
 }
 
-func (m *MockMessageBus) publishWithReply(subject string, message []byte, reply string) {
+func (m *MockMessageBus) publishWithReply(subject string, message []byte, reply string, sync bool) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -106,7 +131,11 @@ func (m *MockMessageBus) publishWithReply(subject string, message []byte, reply 
 		return
 	}
 
-	go callback(message, reply)
+	if sync {
+		callback(message, reply)
+	} else {
+		go callback(message, reply)
+	}
 
 	return
 }

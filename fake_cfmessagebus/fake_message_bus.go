@@ -14,8 +14,9 @@ type FakeMessageBus struct {
 
 	PingResponse bool
 
-	Requests      map[string][]Request
-	Subscriptions map[string][]Subscription
+	Requests          map[string][]Request
+	Subscriptions     map[string][]Subscription
+	PublishedMessages map[string][][]byte
 }
 
 type Request struct {
@@ -38,6 +39,7 @@ func NewFakeMessageBus() *FakeMessageBus {
 func (bus *FakeMessageBus) Reset() {
 	bus.Requests = make(map[string][]Request, 0)
 	bus.Subscriptions = make(map[string][]Subscription, 0)
+	bus.PublishedMessages = make(map[string][][]byte, 0)
 	bus.PingResponse = true
 }
 
@@ -74,7 +76,11 @@ func (bus *FakeMessageBus) UnsubscribeAll() error {
 }
 
 func (bus *FakeMessageBus) Publish(subject string, message []byte) error {
-	//TODO
+	_, ok := bus.PublishedMessages[subject]
+	if !ok {
+		bus.PublishedMessages[subject] = make([][]byte, 0)
+	}
+	bus.PublishedMessages[subject] = append(bus.PublishedMessages[subject], message)
 	return bus.PublishError
 }
 

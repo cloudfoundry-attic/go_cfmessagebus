@@ -114,6 +114,7 @@ func (adapter *NatsAdapter) UnsubscribeAll() error {
 		for _, sub := range adapter.subscriptions {
 			adapter.client.UnsubscribeAll(sub.subject)
 		}
+		adapter.subscriptions = []*Subscription{}
 		return nil
 	})
 }

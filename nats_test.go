@@ -241,13 +241,8 @@ func (s *AdaptersSuite) TestPubSubWhenNatsGoesDown(c *C) {
 		c.Check(messagesReceived, DeepEquals, []string{"some message"})
 	})
 
-	subscriber.UnsubscribeAll()
-
-	publisher.Publish("some-message", []byte("message 2"))
-
-	failOnEvent(receivedChan, 1*time.Second, func() {})
-
 	c.Check(len(messagesReceived), Equals, 1)
+	subscriber.UnsubscribeAll()
 }
 
 func (s *AdaptersSuite) TestRequest(c *C) {

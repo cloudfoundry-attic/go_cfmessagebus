@@ -121,7 +121,7 @@ func (adapter *NatsAdapter) UnsubscribeAll() error {
 
 func (adapter *NatsAdapter) Publish(subject string, message []byte) error {
 	return withConnectionCheck(adapter.client, func() error {
-		return adapter.client.Publish(subject, string(message))
+		return adapter.client.Publish(subject, message)
 	})
 }
 
@@ -133,7 +133,7 @@ func (adapter *NatsAdapter) Request(subject string, message []byte, callback fun
 		}
 
 		adapter.Subscribe(inbox, callback)
-		return adapter.client.PublishWithReplyTo(subject, string(message), inbox)
+		return adapter.client.PublishWithReplyTo(subject, inbox, message)
 	})
 }
 
@@ -183,5 +183,5 @@ func (a *NatsAdapter) replyToMessage(msg *nats.Message, callback func([]byte) []
 		return
 	}
 
-	a.client.Publish(msg.ReplyTo, string(callback([]byte(msg.Payload))))
+	a.client.Publish(msg.ReplyTo, callback([]byte(msg.Payload)))
 }
